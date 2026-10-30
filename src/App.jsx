@@ -201,9 +201,45 @@ const TILES = [
   { r: 'borclar', label: 'Borçlarım', sub: 'Borç ve alacak', icon: 'handshake', bg: '#F5E4E0', fg: '#8E2D1B' },
 ];
 
+// Ana ekran düzeni: kart sırası, gizlenen kartlar ve bölümler
+const homeLayout = (s) => {
+  const h = s.home || {};
+  const ids = TILES.map((t) => t.r);
+  const order = (h.order || []).filter((id) => ids.includes(id));
+  for (const id of ids) if (!order.includes(id)) order.push(id); // yeni eklenen kartlar sona
+  const hidden = (h.hidden || []).filter((id) => ids.includes(id));
+  return { order, hidden, hideMsg: !!h.hideMsg, hideRecent: !!h.hideRecent };
+};
+const tileById = Object.fromEntries(TILES.map((t) => [t.r, t]));
+
 function Home({ ctx }) {
   const { s } = ctx;
   const [sheet, setSheet] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const layout = homeLayout(s);
+  const visible = layout.order.filter((id) => !layout.hidden.includes(id));
+  const hiddenTiles = layout.order.filter((id) => layout.hidden.includes(id));
+  const setLayout = (fn) =>
+    ctx.update((x) => {
+      const l = homeLayout(x);
+      fn(l);
+      x.home = l;
+    });
+  const move = (id, dir) =>
+    setLayout((l) => {
+      const vis = l.order.filter((v) => !l.hidden.includes(v));
+      const i = vis.indexOf(id);
+      const j = i + dir;
+      if (j < 0 || j >= vis.length) return;
+      [vis[i], vis[j]] = [vis[j], vis[i]];
+      l.order = [...vis, ...l.order.filter((v) => l.hidden.includes(v))];
+    });
+  const hide = (id) => setLayout((l) => void l.hidden.push(id));
+  const show = (id) =>
+    setLayout((l) => {
+      l.hidden = l.hidden.filter((v) => v !== id);
+      l.order = [...l.order.filter((v) => v !== id && !l.hidden.includes(v)), id, ...l.order.filter((v) => l.hidden.includes(v))];
+    });
   const bal = D.balance(s);
   const ym = D.monthKey();
   const spent = D.monthSpending(s, ym).total;
@@ -225,10 +261,24 @@ function Home({ ctx }) {
             </button>
           )}
         </div>
-        <button className="icon-btn" style={{ marginLeft: 'auto' }} onClick={() => go('ayarlar')} aria-label="Ayarlar">
-          <Icon name="gear" />
-        </button>
+        <div className="row gap" style={{ marginLeft: 'auto' }}>
+          {editing ? (
+            <button className="btn small primary done-btn" onClick={() => setEditing(false)}>
+              Bitti
+            </button>
+          ) : (
+            <>
+              <button className="icon-btn" onClick={() => setEditing(true)} aria-label="Ana ekranı düzenle">
+                <Icon name="edit" />
+              </button>
+              <button className="icon-btn" onClick={() => go('ayarlar')} aria-label="Ayarlar">
+                <Icon name="gear" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
+      {editing && <p className="edit-hint">Kartları kaldırmak için −, yerini değiştirmek için oklara dokun.</p>}
 
       <div className="balance">
         <div className="row between">
@@ -261,7 +311,7 @@ function Home({ ctx }) {
         </div>
       </div>
 
-      <MotivationCard {...msg} />
+      {!layout.hideMsg && <MotivationCard {...msg} />}
 
       {pending.length > 0 && (
         <button className="alert" onClick={() => go(pending[0].kind === 'fatura' ? 'faturalar' : 'odemeler')}>
@@ -270,26 +320,92 @@ function Home({ ctx }) {
       )}
 
       <div className="tiles">
-        {TILES.map((t) => (
-          <button key={t.r} className="tile" onClick={() => go(t.r)}>
-            <span className="tile-ic" style={{ background: t.bg }}>
-              <Icon name={t.icon} size={22} color={t.fg} />
-            </span>
-            <span>
-              <strong>{t.label}</strong>
-              <small>{t.sub}</small>
-            </span>
-          </button>
-        ))}
+        {visible.map((id, i) => {
+          const t = tileById[id];
+          const face = (
+            <>
+              <span className="tile-ic" style={{ background: t.bg }}>
+                <Icon name={t.icon} size={22} color={t.fg} />
+              </span>
+              <span>
+                <strong>{t.label}</strong>
+                <small>{t.sub}</small>
+              </span>
+            </>
+          );
+          if (!editing)
+            return (
+              <button key={id} className="tile" onClick={() => go(id)}>
+                {face}
+              </button>
+            );
+          return (
+            <div key={id} className="tile editing" style={{ animationDelay: `${(i % 3) * -0.12}s` }}>
+              {face}
+              <button className="tile-remove" onClick={() => hide(id)} aria-label={`${t.label} kartını kaldır`}>
+                <Icon name="minus" size={16} color="#fff" width={3} />
+              </button>
+              <span className="tile-move">
+                <button onClick={() => move(id, -1)} disabled={i === 0} aria-label={`${t.label} kartını öne al`}>
+                  <Icon name="chevL" size={16} />
+                </button>
+                <button onClick={() => move(id, 1)} disabled={i === visible.length - 1} aria-label={`${t.label} kartını geriye al`}>
+                  <Icon name="chevR" size={16} />
+                </button>
+              </span>
+            </div>
+          );
+        })}
       </div>
+      {!editing && !visible.length && <Empty text="Ana ekranda kart yok. Sağ üstteki kalemle kart ekleyebilirsin." />}
 
-      <div className="section-head">
-        <h3>Son işlemler</h3>
-        <button className="link" onClick={() => go('harcamalar')}>
-          Tümü
-        </button>
-      </div>
-      {recent.length ? <TxList ctx={ctx} items={recent} /> : <Empty text="Henüz işlem yok. Para Ekle ya da Harcama ile başla." />}
+      {editing && (
+        <>
+          {hiddenTiles.length > 0 && (
+            <>
+              <div className="section-head">
+                <h3>Eklenebilecek kartlar</h3>
+              </div>
+              <div className="tiles">
+                {hiddenTiles.map((id) => {
+                  const t = tileById[id];
+                  return (
+                    <button key={id} className="tile ghost-tile" onClick={() => show(id)} aria-label={`${t.label} kartını ekle`}>
+                      <span className="tile-ic" style={{ background: t.bg }}>
+                        <Icon name={t.icon} size={22} color={t.fg} />
+                      </span>
+                      <span>
+                        <strong>{t.label}</strong>
+                        <small className="add-label">+ Ekle</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          <div className="card">
+            <h3>Ana ekranda göster</h3>
+            <Check checked={!layout.hideMsg} onChange={(v) => setLayout((l) => void (l.hideMsg = !v))} label="Günün mesajı" />
+            <Check checked={!layout.hideRecent} onChange={(v) => setLayout((l) => void (l.hideRecent = !v))} label="Son işlemler" />
+            <button className="link" style={{ alignSelf: 'flex-start' }} onClick={() => ctx.update((x) => void delete x.home)}>
+              Varsayılan düzene dön
+            </button>
+          </div>
+        </>
+      )}
+
+      {!layout.hideRecent && !editing && (
+        <>
+          <div className="section-head">
+            <h3>Son işlemler</h3>
+            <button className="link" onClick={() => go('harcamalar')}>
+              Tümü
+            </button>
+          </div>
+          {recent.length ? <TxList ctx={ctx} items={recent} /> : <Empty text="Henüz işlem yok. Para Ekle ya da Harcama ile başla." />}
+        </>
+      )}
 
       {(sheet === 'gelir' || sheet === 'gider') && <TxSheet ctx={ctx} type={sheet} onClose={() => setSheet(null)} />}
       {sheet === 'name' && <NameSheet ctx={ctx} onClose={() => setSheet(null)} />}
