@@ -17,7 +17,8 @@ function clean(t) {
 // Son hatayı tanı için sakla (anahtarın kendisi asla yazılmaz)
 export const lastAiError = { value: null };
 
-export async function aiText(prompt) {
+// Gemini'ye istek gönderir, ham metni döndürür (modeller sırayla denenir)
+async function gemini(prompt, generationConfig) {
   const key = process.env.GEMINI_API_KEY;
   lastAiError.value = null;
   if (!key) {
@@ -30,10 +31,7 @@ export async function aiText(prompt) {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1, maxOutputTokens: 1024 },
-        }),
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig }),
         signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) {
@@ -44,7 +42,7 @@ export async function aiText(prompt) {
       }
       const j = await res.json();
       const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim();
-      if (text) return clean(text);
+      if (text) return text;
       errors.push(`${model}: boş cevap ${JSON.stringify(j).slice(0, 200)}`);
     } catch (e) {
       console.error('gemini', model, e.message);
@@ -53,6 +51,23 @@ export async function aiText(prompt) {
   }
   lastAiError.value = errors.join(' | ');
   return null;
+}
+
+export async function aiText(prompt) {
+  const t = await gemini(prompt, { temperature: 1, maxOutputTokens: 1024 });
+  return t ? clean(t) : null;
+}
+
+// JSON cevap ister; ayrıştırılamazsa null
+export async function aiJSON(prompt, schema) {
+  const t = await gemini(prompt, { temperature: 0.1, maxOutputTokens: 2048, responseMimeType: 'application/json', responseSchema: schema });
+  if (!t) return null;
+  try {
+    return JSON.parse(t.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+  } catch {
+    lastAiError.value = 'JSON ayrıştırılamadı: ' + t.slice(0, 200);
+    return null;
+  }
 }
 
 // İlerlemeye göre ton: kullanıcıyı gaza getirecek açı

@@ -208,7 +208,7 @@ const homeLayout = (s) => {
   const order = (h.order || []).filter((id) => ids.includes(id));
   for (const id of ids) if (!order.includes(id)) order.push(id); // yeni eklenen kartlar sona
   const hidden = (h.hidden || []).filter((id) => ids.includes(id));
-  return { order, hidden, hideMsg: !!h.hideMsg, hideRecent: !!h.hideRecent };
+  return { order, hidden, hideMsg: !!h.hideMsg, hideRecent: !!h.hideRecent, hideQuick: !!h.hideQuick };
 };
 const tileById = Object.fromEntries(TILES.map((t) => [t.r, t]));
 
@@ -311,6 +311,8 @@ function Home({ ctx }) {
         </div>
       </div>
 
+      {!layout.hideQuick && <QuickAdd ctx={ctx} />}
+
       {!layout.hideMsg && <MotivationCard {...msg} />}
 
       {pending.length > 0 && (
@@ -386,6 +388,7 @@ function Home({ ctx }) {
           )}
           <div className="card">
             <h3>Ana ekranda göster</h3>
+            <Check checked={!layout.hideQuick} onChange={(v) => setLayout((l) => void (l.hideQuick = !v))} label="Hızlı kayıt kutusu" />
             <Check checked={!layout.hideMsg} onChange={(v) => setLayout((l) => void (l.hideMsg = !v))} label="Günün mesajı" />
             <Check checked={!layout.hideRecent} onChange={(v) => setLayout((l) => void (l.hideRecent = !v))} label="Son işlemler" />
             <button className="link" style={{ alignSelf: 'flex-start' }} onClick={() => ctx.update((x) => void delete x.home)}>
@@ -410,6 +413,140 @@ function Home({ ctx }) {
       {(sheet === 'gelir' || sheet === 'gider') && <TxSheet ctx={ctx} type={sheet} onClose={() => setSheet(null)} />}
       {sheet === 'name' && <NameSheet ctx={ctx} onClose={() => setSheet(null)} />}
     </>
+  );
+}
+
+// ---------- Hızlı kayıt (doğal dil) ----------
+async function parseText(text, s) {
+  const categories = s.categories.map((c) => c.name);
+  try {
+    if (!navigator.onLine) throw new Error('offline');
+    const res = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, categories, incomeTypes: D.INCOME_TYPES, today: D.today() }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined,
+    });
+    const j = res.ok ? await res.json() : null;
+    if (j?.items) return { items: j.items, ai: true };
+  } catch {
+    /* yerel çözümleyiciye geç */
+  }
+  return { items: D.quickParse(text, s.categories), ai: false };
+}
+
+function QuickAdd({ ctx }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    const r = await parseText(t, ctx.s);
+    setBusy(false);
+    if (!r.items.length) return ctx.notify('Tutar bulamadım, örn. "Migros 250"');
+    setResult(r);
+  };
+  return (
+    <>
+      <form className="quick-add" onSubmit={submit}>
+        <span className="qa-ic" aria-hidden="true">
+          <Icon name="spark" size={18} color="#0E4D40" />
+        </span>
+        <label htmlFor="qa-input" className="sr-only">
+          Hızlı kayıt
+        </label>
+        <input
+          id="qa-input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Migros'ta 250 harcadım…"
+          autoComplete="off"
+          enterKeyHint="send"
+        />
+        <button type="submit" className={busy ? 'qa-send busy' : 'qa-send'} disabled={busy || !text.trim()} aria-label="Kaydı çözümle">
+          {busy ? <span className="qa-spin" /> : <Icon name="chevR" size={20} color="#fff" width={2.4} />}
+        </button>
+      </form>
+      {result && (
+        <ConfirmSheet
+          ctx={ctx}
+          initial={result.items}
+          ai={result.ai}
+          onClose={() => setResult(null)}
+          onSaved={() => {
+            setResult(null);
+            setText('');
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function ConfirmSheet({ ctx, initial, ai, onClose, onSaved }) {
+  const [items, setItems] = useState(() => initial.map((it) => ({ ...it, amount: D.num(it.amount, 2), key: D.uid() })));
+  const set = (key, patch) => setItems((xs) => xs.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  const cats = ctx.s.categories.map((c) => c.name);
+  const save = () => {
+    const ok = items.map((it) => ({ ...it, amount: D.parseAmount(it.amount) })).filter((it) => it.amount > 0);
+    if (!ok.length) return ctx.notify('Kaydedilecek tutar yok');
+    ctx.update((x) => {
+      for (const it of ok) x.transactions.push({ id: D.uid(), date: it.date, type: it.type, amount: it.amount, category: it.category, note: it.note.trim() });
+    });
+    ctx.notify(ok.length === 1 ? 'Kaydedildi' : `${ok.length} kayıt eklendi`);
+    onSaved();
+  };
+  return (
+    <Sheet title={items.length > 1 ? `${items.length} kayıt bulundu` : 'Kaydı onayla'} onClose={onClose}>
+      <p className="muted small" style={{ margin: 0 }}>
+        {ai ? 'Yapay zeka şöyle anladı.' : 'Hızlı çözümleme (internet/yapay zeka yok).'} Gerekirse düzelt, sonra kaydet.
+      </p>
+      {items.map((it) => (
+        <div className="confirm-item" key={it.key}>
+          <div className="row gap center">
+            <Segmented
+              options={[
+                ['gider', 'Gider'],
+                ['gelir', 'Gelir'],
+              ]}
+              value={it.type}
+              onChange={(type) => set(it.key, { type, category: type === 'gelir' ? D.INCOME_TYPES[0] : cats.includes('Diğer') ? 'Diğer' : cats[0] })}
+            />
+            {items.length > 1 && (
+              <button className="icon-btn small ghost" onClick={() => setItems((xs) => xs.filter((x) => x.key !== it.key))} aria-label="Bu kaydı çıkar">
+                <Icon name="close" size={16} />
+              </button>
+            )}
+          </div>
+          <div className="row gap">
+            <Field label="Tutar">
+              <AmountInput value={it.amount} onChange={(amount) => set(it.key, { amount })} />
+            </Field>
+            <Field label={it.type === 'gelir' ? 'Tür' : 'Kategori'}>
+              <select value={it.category} onChange={(e) => set(it.key, { category: e.target.value })}>
+                {(it.type === 'gelir' ? D.INCOME_TYPES : cats).map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="row gap">
+            <Field label="Açıklama">
+              <input value={it.note} onChange={(e) => set(it.key, { note: e.target.value })} />
+            </Field>
+            <Field label="Tarih">
+              <input type="date" value={it.date} onChange={(e) => set(it.key, { date: e.target.value })} />
+            </Field>
+          </div>
+        </div>
+      ))}
+      <button className="btn primary" onClick={save}>
+        {items.length > 1 ? `Hepsini kaydet (${items.length})` : 'Kaydet'}
+      </button>
+    </Sheet>
   );
 }
 
@@ -1619,7 +1756,7 @@ function Settings({ ctx }) {
           Tüm verileri sil
         </button>
       </div>
-      <p className="muted small hint">Cüzdanım v1.0 · Kurlar: fawazahmed0/currency-api</p>
+      <p className="muted small hint">Cüzdanım v{__APP_VERSION__} · Kurlar: fawazahmed0/currency-api</p>
     </>
   );
 }

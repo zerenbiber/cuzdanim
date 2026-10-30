@@ -38,6 +38,7 @@ export const parseAmount = (s) => {
   if (typeof s === 'number') return s;
   let t = String(s || '').trim().replace(/\s|₺/g, '');
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); // "25.000" Türkçe binlik ayırıcı
   const v = parseFloat(t);
   return Number.isFinite(v) ? v : 0;
 };
@@ -294,4 +295,70 @@ export function downloadFile(name, content, type) {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ---------- Hızlı kayıt: yerel (internetsiz) çözümleyici ----------
+// Yapay zeka kullanılamazsa "Migros 250, dün kahve 60, maaş yattı 25 bin" gibi cümleleri basitçe çözer.
+const CAT_WORDS = {
+  Market: ['migros', 'bim', 'a101', 'şok', 'sok', 'carrefour', 'market', 'manav', 'kasap', 'fırın', 'ekmek', 'süt'],
+  'Yeme-içme': ['kahve', 'yemek', 'restoran', 'cafe', 'kafe', 'starbucks', 'getir', 'yemeksepeti', 'döner', 'pizza', 'burger', 'çay', 'tatlı', 'kahvaltı', 'öğle'],
+  Ulaşım: ['benzin', 'akaryakıt', 'mazot', 'shell', 'opet', 'bp', 'taksi', 'uber', 'otobüs', 'metro', 'akbil', 'istanbulkart', 'dolmuş', 'bilet', 'otopark'],
+  Eğlence: ['sinema', 'netflix', 'spotify', 'konser', 'oyun', 'steam', 'youtube', 'bowling', 'tiyatro'],
+  Giyim: ['zara', 'lcw', 'lc waikiki', 'h&m', 'ayakkabı', 'giyim', 'tişört', 'pantolon', 'mont', 'elbise', 'defacto', 'koton'],
+  Eğitim: ['kitap', 'kurs', 'okul', 'kırtasiye', 'defter', 'udemy'],
+  Faturalar: ['elektrik', 'su faturası', 'doğalgaz', 'internet', 'fatura', 'telefon faturası'],
+};
+const INCOME_WORDS = { Maaş: ['maaş', 'maas'], Burs: ['burs'], Harçlık: ['harçlık', 'harclik'], 'Ek iş': ['ek iş', 'freelance', 'proje parası'] };
+// Not: \b Türkçe harflerde çalışmadığı için boşluk tabanlı sınır kullanılıyor
+const INCOME_HINT = /(?<=^|\s)(maaş|maas|burs|harçlık|yattı|geldi|kazandım|gelir|prim|ikramiye|iade)(?=\s|$|[.,!])/iu;
+const FILLER = /(?<=^|\s)(harcadım|harcadim|ödedim|verdim|aldım|aldim|için|tl|lira|₺|yattı|geldi|da|de|ta|te|bugün|dün|önceki gün)(?=\s|$|[.,!])/giu;
+
+const shiftDay = (iso, d) => {
+  const t = new Date(iso + 'T12:00:00');
+  t.setDate(t.getDate() + d);
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+};
+
+export function quickParse(text, categories) {
+  const catNames = categories.map((c) => c.name);
+  const parts = String(text || '')
+    .split(/,(?!\d)|[;\n]+|\s+ve\s+/i) // sayı içindeki virgülü (1,5) bölme
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const out = [];
+  for (const part of parts) {
+    const lower = part.toLocaleLowerCase('tr-TR');
+    const m = lower.match(/(\d+(?:[.,]\d+)*)\s*(bin|k\b)?/);
+    if (!m) continue;
+    let amount = parseAmount(m[1]);
+    if (m[2]) amount *= 1000;
+    if (!(amount > 0)) continue;
+    const date = /önceki gün/.test(lower) ? shiftDay(today(), -2) : /(?<=^|\s)dün(?=\s|$|[.,!])/u.test(lower) ? shiftDay(today(), -1) : today();
+    const isIncome = INCOME_HINT.test(lower);
+    let category = 'Diğer';
+    let keyword = '';
+    const table = isIncome ? INCOME_WORDS : CAT_WORDS;
+    for (const [cat, words] of Object.entries(table)) {
+      const w = words.find((w) => lower.includes(w));
+      if (w && (isIncome ? INCOME_TYPES.includes(cat) : catNames.includes(cat))) {
+        category = cat;
+        keyword = w;
+        break;
+      }
+    }
+    if (!isIncome && category === 'Diğer' && !catNames.includes('Diğer')) category = catNames[0];
+    let note = part
+      .replace(m[0], ' ')
+      .replace(/['’]/g, ' ')
+      .replace(FILLER, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .slice(0, 3)
+      .join(' ');
+    if (!note) note = keyword || category;
+    note = note.charAt(0).toLocaleUpperCase('tr-TR') + note.slice(1);
+    out.push({ type: isIncome ? 'gelir' : 'gider', amount: Math.round(amount * 100) / 100, category, note, date });
+  }
+  return out.slice(0, 8);
 }
