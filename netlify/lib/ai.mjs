@@ -1,6 +1,7 @@
 // Gemini ile kısa, kişisel motivasyon mesajı üretir.
 // Anahtar yoksa ya da hata olursa null döner; çağıran taraf hazır mesaja geçer.
-const MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite,gemini-2.5-flash').split(',').map((m) => m.trim()).filter(Boolean);
+// Google'ın önerdiği güncel modeller; ilki olmazsa sıradakini dener. GEMINI_MODEL ile değiştirilebilir.
+const MODELS = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.8-flash,gemini-flash-latest').split(',').map((m) => m.trim()).filter(Boolean);
 
 const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
 
@@ -30,12 +31,12 @@ export async function aiText(prompt) {
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1, maxOutputTokens: 150, thinkingConfig: { thinkingBudget: 0 } },
+          generationConfig: { temperature: 1, maxOutputTokens: 1024 },
         }),
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) {
-        const detail = (await res.text()).slice(0, 300);
+        const detail = (await res.text()).replace(/\s+/g, ' ').slice(0, 220);
         console.error('gemini', model, res.status, detail);
         errors.push(`${model}: ${res.status} ${detail}`);
         continue;
