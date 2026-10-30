@@ -263,7 +263,10 @@ function Home({ ctx }) {
 
       <div className="motivation">
         <Icon name="spark" size={18} color="#8A5A0B" />
-        <span>{msg}</span>
+        <span>
+          {msg}
+          {s.aiMsg?.date === D.today() && <small className="ai-tag">Yapay zeka</small>}
+        </span>
       </div>
 
       {pending.length > 0 && (
