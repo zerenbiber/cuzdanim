@@ -41,9 +41,10 @@ export function dueReminders(bills, today) {
 }
 
 // Günün hangi bildirimi: sabah / öğlen / akşam
+export const hourTR = (d = new Date()) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', hour: '2-digit', hour12: false }).format(d));
 export const slotTR = (d = new Date()) => {
-  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', hour: '2-digit', hour12: false }).format(d));
-  return h < 12 ? 'sabah' : h < 17 ? 'oglen' : 'aksam';
+  const h = hourTR(d);
+  return h < 12 ? 'sabah' : h < 15 ? 'oglen' : h < 17 ? 'kumbara' : 'aksam'; // 09 / 14 / 15 / 20
 };
 
 export function buildPayload(items, slot = 'sabah') {
@@ -56,4 +57,32 @@ export function buildPayload(items, slot = 'sabah') {
     return { title: `${lead}${i.name} ödemesi`, body: `${money(i.amount)} · ${when(i.days)}`, url };
   }
   return { title: `${lead}${items.length} ödemen yaklaşıyor`, body: items.map((i) => `${i.name} ${money(i.amount)} (${when(i.days)})`).join(', '), url };
+}
+
+// ---------- Günlük kumbara hatırlatması ----------
+const roundUp = (n, step) => Math.ceil(n / step) * step;
+
+export function savingsNudge(sv, today) {
+  if (!sv || sv.on === false) return null;
+  if (sv.lastContrib === today) return null; // bugün zaten para atılmış
+  const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
+  const open = (sv.goals || []).filter((g) => g.target > g.saved);
+  let amount = sv.amount || 100;
+  let body;
+  if (open.length) {
+    // En yakın tarihli hedef, yoksa en çok ilerlemiş hedef
+    const g = [...open].sort((a, b) => {
+      if (a.deadline && b.deadline) return a.deadline < b.deadline ? -1 : 1;
+      if (a.deadline || b.deadline) return a.deadline ? -1 : 1;
+      return b.saved / b.target - a.saved / a.target;
+    })[0];
+    const pct = Math.round((g.saved / g.target) * 100);
+    const left = g.target - g.saved;
+    const days = g.deadline ? daysBetween(today, g.deadline) : 0;
+    if (days > 0) amount = Math.max(10, roundUp(left / days, 10));
+    body = `Bugün kumbarana ${money(amount)} at. ${g.name} hedefinde %${pct} tamam, kalan ${money(left)}.`;
+  } else {
+    body = `Bugün kumbarana ${money(amount)} at. Küçük adımlar büyük birikime dönüşür!`;
+  }
+  return { title: 'Kumbara zamanı', body, url: './#/hedefler' };
 }

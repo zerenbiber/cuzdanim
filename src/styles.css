@@ -295,3 +295,5 @@ h3 { font-size: 16px; }
 .leg-val { text-align: right; }
 .leg.off { opacity: 0.45; }
 .leg.off .tok { filter: grayscale(1); }
+.nudge { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--bg); }
+.nudge .amount { max-width: 130px; background: #fff; }

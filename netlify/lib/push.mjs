@@ -35,3 +35,20 @@ export function cleanBills(bills) {
     paid: (Array.isArray(b?.paid) ? b.paid : []).filter((k) => /^\d{4}-\d{2}$/.test(k)).slice(-24),
   }));
 }
+
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+
+export function cleanSavings(x) {
+  const goals = (Array.isArray(x?.goals) ? x.goals : []).slice(0, 30).map((g) => ({
+    name: String(g?.name || 'Hedef').slice(0, 60),
+    target: Number(g?.target) || 0,
+    saved: Number(g?.saved) || 0,
+    deadline: isDate(g?.deadline) ? g.deadline : null,
+  }));
+  return {
+    on: x?.on !== false,
+    amount: Math.min(1e6, Math.max(1, Number(x?.amount) || 100)),
+    lastContrib: isDate(x?.lastContrib) ? x.lastContrib : null,
+    goals,
+  };
+}

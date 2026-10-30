@@ -7,6 +7,18 @@ export const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const slim = (bills) =>
   bills.map((b) => ({ name: b.name, amount: b.amount, kind: b.kind, repeat: b.repeat, day: b.day, date: b.date, paid: Object.keys(b.paid || {}) }));
 
+// Sunucuya giden hedef özeti: sadece ad, hedef, biriken, tarih
+export const slimSavings = (s) => {
+  let last = null;
+  for (const g of s.goals) for (const c of g.contribs) if (c.amount > 0 && (!last || c.date > last)) last = c.date;
+  return {
+    on: s.nudge?.on !== false,
+    amount: s.nudge?.amount || 100,
+    lastContrib: last,
+    goals: s.goals.filter((g) => !g.done).map((g) => ({ name: g.name, target: g.target, saved: g.contribs.reduce((a, c) => a + c.amount, 0), deadline: g.deadline })),
+  };
+};
+
 const b64ToBytes = (b64) => {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -25,7 +37,7 @@ async function currentSub() {
   return reg ? reg.pushManager.getSubscription() : null;
 }
 
-export async function enablePush(bills) {
+export async function enablePush(state) {
   if (!pushSupported()) throw new Error(isIOS() && !isStandalone() ? 'Uygulamayı ana ekrandaki ikondan aç' : 'Bu cihaz bildirimleri desteklemiyor');
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Bildirim izni verilmedi. Ayarlar > Bildirimler > Cüzdanım');
@@ -34,12 +46,12 @@ export async function enablePush(bills) {
   if (!publicKey) throw new Error('Sunucuda bildirim anahtarı yok');
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
-  await api({ action: 'sync', subscription: sub.toJSON(), bills: slim(bills) });
+  await api({ action: 'sync', subscription: sub.toJSON(), bills: slim(state.bills), savings: slimSavings(state) });
 }
 
-export async function syncBills(bills) {
+export async function syncAll(state) {
   const sub = await currentSub();
-  if (sub) await api({ action: 'sync', subscription: sub.toJSON(), bills: slim(bills) });
+  if (sub) await api({ action: 'sync', subscription: sub.toJSON(), bills: slim(state.bills), savings: slimSavings(state) });
 }
 
 export async function testPush() {

@@ -1,9 +1,9 @@
 // /api/push
 // GET  -> { publicKey }
-// POST { action: 'sync', subscription, bills }  -> bu cihazın fatura listesini kaydeder
+// POST { action: 'sync', subscription, bills, savings } -> bu cihazın fatura ve hedef özetini kaydeder
 // POST { action: 'test', subscription }         -> hemen deneme bildirimi gönderir
 // POST { action: 'remove', endpoint }           -> bildirimleri kapatır
-import { subs, keyOf, setupVapid, validSubscription, cleanBills } from '../lib/push.mjs';
+import { subs, keyOf, setupVapid, validSubscription, cleanBills, cleanSavings } from '../lib/push.mjs';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
@@ -17,7 +17,7 @@ export default async (req) => {
   } catch {
     return json({ error: 'json' }, 400);
   }
-  const { action, subscription, bills, endpoint } = body || {};
+  const { action, subscription, bills, savings, endpoint } = body || {};
 
   if (action === 'remove') {
     if (typeof endpoint === 'string') await subs().delete(keyOf(endpoint));
@@ -29,7 +29,7 @@ export default async (req) => {
 
   if (action === 'sync') {
     const clean = cleanBills(bills);
-    await subs().setJSON(keyOf(sub.endpoint), { subscription: sub, bills: clean, updatedAt: Date.now() });
+    await subs().setJSON(keyOf(sub.endpoint), { subscription: sub, bills: clean, savings: cleanSavings(savings), updatedAt: Date.now() });
     return json({ ok: true, count: clean.length });
   }
 

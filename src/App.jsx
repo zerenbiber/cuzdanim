@@ -78,12 +78,12 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Bildirimler açıksa fatura/ödeme listesi değişince sunucuya bildir
+  // Bildirimler açıksa faturalar veya hedefler değişince (ve her açılışta) sunucuya bildir
   useEffect(() => {
     if (!s.pushOn) return;
-    const t = setTimeout(() => P.syncBills(s.bills).catch(() => {}), 800);
+    const t = setTimeout(() => P.syncAll(s).catch(() => {}), 800);
     return () => clearTimeout(t);
-  }, [s.bills, s.pushOn]);
+  }, [s.bills, s.goals, s.nudge, s.pushOn]);
 
   if (locked) return <Lock hash={s.pinHash} onOpen={() => setLocked(false)} />;
   if (!s.onboarded) return <Onboarding ctx={ctx} />;
@@ -1283,6 +1283,27 @@ function PushCard({ ctx }) {
           : 'Fatura ve ödemelerin son günü yaklaşınca telefonuna bildirim gelsin.'}
       </p>
       {needInstall && <p className="small red">Bildirimler için uygulamayı ana ekrandaki ikondan aç.</p>}
+      {s.pushOn && (
+        <div className="nudge">
+          <Check
+            checked={s.nudge?.on !== false}
+            onChange={(v) => ctx.update((x) => void (x.nudge = { amount: 100, ...(x.nudge || {}), on: v }))}
+            label="Günlük kumbara hatırlatması (15:00)"
+          />
+          {s.nudge?.on !== false && (
+            <div className="row gap center">
+              <span className="small muted grow">Hedef tarihi yoksa önerilecek tutar</span>
+              <AmountInput
+                value={String(s.nudge?.amount ?? 100)}
+                onChange={(v) => ctx.update((x) => void (x.nudge = { on: true, ...(x.nudge || {}), amount: D.parseAmount(v) || 0 }))}
+              />
+            </div>
+          )}
+          <p className="muted small" style={{ margin: 0 }}>
+            O gün kumbaraya para attıysan gelmez. Tarihli hedefin varsa tutar ona göre hesaplanır.
+          </p>
+        </div>
+      )}
       <div className="row gap wrap">
         {s.pushOn ? (
           <>
@@ -1308,7 +1329,7 @@ function PushCard({ ctx }) {
             disabled={busy || needInstall}
             onClick={() =>
               run(async () => {
-                await P.enablePush(s.bills);
+                await P.enablePush(s);
                 ctx.update((x) => void (x.pushOn = true));
               }, 'Bildirimler açıldı')
             }
