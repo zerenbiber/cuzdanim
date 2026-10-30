@@ -23,7 +23,7 @@ export default async (req) => {
   if (looksValid(ai, facts.amount, 'anasayfa')) return json({ text: ai, ai: true });
   const out = { text: nudgeText(facts), ai: false };
   if (req.method === 'GET') {
-    out.anahtar = process.env.GEMINI_API_KEY ? `var (${process.env.GEMINI_API_KEY.slice(0, 3)}…, ${process.env.GEMINI_API_KEY.length} karakter)` : 'yok';
+    out.anahtar = process.env.GEMINI_API_KEY ? 'var' : 'yok';
     out.hata = lastAiError.value || (ai ? `Cevap geldi ama tutar içermiyor: ${ai}` : null);
   }
   return json(out);
