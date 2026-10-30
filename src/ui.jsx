@@ -212,3 +212,19 @@ export function Confetti({ text, onDone }) {
     </div>
   );
 }
+
+// ---------- Günün mesajı kartı ----------
+export function MotivationCard({ text, ai }) {
+  return (
+    <section className="motd" aria-label="Günün mesajı">
+      <div className="motd-top">
+        <span className="motd-ic">
+          <Icon name="spark" size={16} color="#1C2541" width={2.2} />
+        </span>
+        <span className="motd-label">Günün mesajı</span>
+        {ai && <span className="motd-ai">Yapay zeka</span>}
+      </div>
+      <p className="motd-text">{text}</p>
+    </section>
+  );
+}

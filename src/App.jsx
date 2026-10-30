@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import * as D from './data.js';
 import { Vault } from './vault.jsx';
 import * as P from './push.js';
-import { Icon, Header, Sheet, Field, AmountInput, Chips, Segmented, Bar, Check, Empty, Toast, MonthPicker, Jar, Confetti } from './ui.jsx';
+import { MotivationCard, Icon, Header, Sheet, Field, AmountInput, Chips, Segmented, Bar, Check, Empty, Toast, MonthPicker, Jar, Confetti } from './ui.jsx';
 
 // ---------- Yönlendirme ----------
 // Her alt sayfa ana ekrana döner. Uygulama kendi geçmiş kaydını tutar;
@@ -80,10 +80,10 @@ export default function App() {
 
   // Günün mesajı: günde bir kez yapay zekadan al (olmazsa hazır mesajlar kalır)
   useEffect(() => {
-    if (!s.onboarded || s.aiMsg?.date === D.today() || !navigator.onLine) return;
+    if (!s.onboarded || (s.aiMsg?.v === 2 && s.aiMsg.date === D.today()) || !navigator.onLine) return;
     fetch('/api/motivation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ savings: P.slimSavings(s) }) })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j?.ai && update((x) => void (x.aiMsg = { date: D.today(), text: j.text })))
+      .then((j) => j?.ai && update((x) => void (x.aiMsg = { v: 2, date: D.today(), text: j.text })))
       .catch(() => {});
   }, [s.onboarded]);
 
@@ -208,7 +208,7 @@ function Home({ ctx }) {
   const ym = D.monthKey();
   const spent = D.monthSpending(s, ym).total;
   const lim = D.totalLimit(s);
-  const msg = useMemo(() => (s.aiMsg?.date === D.today() ? s.aiMsg.text : D.dailyMessage(s)), [s]);
+  const msg = useMemo(() => todayMessage(s), [s]);
   const recent = [...s.transactions].sort((a, b) => (a.date + a.id < b.date + b.id ? 1 : -1)).slice(0, 5);
   const pending = D.billsForMonth(s, 'fatura', ym).concat(D.billsForMonth(s, 'odeme', ym)).filter((b) => !b.isPaid && b.daysLeft <= 3);
 
@@ -261,13 +261,7 @@ function Home({ ctx }) {
         </div>
       </div>
 
-      <div className="motivation">
-        <Icon name="spark" size={18} color="#8A5A0B" />
-        <span>
-          {msg}
-          {s.aiMsg?.date === D.today() && <small className="ai-tag">Yapay zeka</small>}
-        </span>
-      </div>
+      <MotivationCard {...msg} />
 
       {pending.length > 0 && (
         <button className="alert" onClick={() => go(pending[0].kind === 'fatura' ? 'faturalar' : 'odemeler')}>
@@ -302,6 +296,12 @@ function Home({ ctx }) {
     </>
   );
 }
+
+// Günün mesajı: bugün yapay zekadan geldiyse o, yoksa hazır mesaj
+const todayMessage = (s) => {
+  const ai = s.aiMsg?.v === 2 && s.aiMsg.date === D.today();
+  return { text: ai ? s.aiMsg.text : D.dailyMessage(s), ai };
+};
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -924,10 +924,7 @@ function Goals({ ctx }) {
   return (
     <>
       <Header title="Hedeflerim" onBack={back} />
-      <div className="motivation">
-        <Icon name="spark" size={18} color="#8A5A0B" />
-        <span>{s.aiMsg?.date === D.today() ? s.aiMsg.text : D.dailyMessage(s)}</span>
-      </div>
+      <MotivationCard {...todayMessage(s)} />
       {active.length > 0 && (
         <div className="card">
           <div className="row between end">

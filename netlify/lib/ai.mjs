@@ -7,6 +7,7 @@ const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }
 
 function clean(t) {
   return t
+    .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
     .replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '')
     .replace(/\s*\n+\s*/g, ' ')
     .slice(0, 220)
@@ -59,22 +60,23 @@ export function nudgePrompt(facts, purpose = 'bildirim') {
   const lines = [
     'Sen kişisel finans uygulaması "Cüzdanım"ın samimi birikim koçusun.',
     purpose === 'bildirim'
-      ? 'Türkçe, tek cümlelik, en fazla 140 karakterlik, sıcak ve motive edici bir günlük kumbara hatırlatması yaz.'
-      : 'Uygulamanın ana ekranında gösterilecek, Türkçe, en fazla 160 karakterlik, sıcak ve motive edici günün mesajını yaz.',
+      ? 'Türkçe, ÇOK KISA bir günlük kumbara hatırlatması yaz: tek cümle, en fazla 10 kelime, en fazla 70 karakter.'
+      : 'Uygulamanın ana ekranında büyük puntoyla gösterilecek ÇOK KISA günün mesajını yaz: tek cümle, en fazla 9 kelime, en fazla 60 karakter.',
     facts.name ? `Kullanıcının adı: ${facts.name}. Adıyla hitap et.` : 'Kullanıcının adını bilmiyorsun, isim kullanma.',
-    `Bugün kumbaraya atması önerilen tutar: ${money(facts.amount)}. Bu tutarı aynen yaz.`,
+    `Bugün kumbaraya atması önerilen tutar: ${money(facts.amount)}. Bu tutarı rakamla ve ₺ işaretiyle aynen yaz.`,
   ];
   if (facts.goal) {
     const g = facts.goal;
-    lines.push(`Hedefi: ${g.name}. %${g.pct} tamamlandı, kalan ${money(g.left)}.${g.days > 0 ? ` Hedef tarihine ${g.days} gün var.` : ''} Hedefin adını geçir.`);
+    lines.push(`Hedefi: ${g.name} (%${g.pct} tamamlandı). Kısaysa hedefin adını geçir; yüzde veya kalan tutarı yazmak zorunda değilsin.`);
   } else lines.push('Henüz bir hedefi yok; birikime başlamaya teşvik et.');
-  lines.push('Her gün farklı bir üslup kullan: bazen esprili, bazen ilham verici, bazen pratik bir ipucu. Tırnak işareti, başlık veya açıklama yazma; sadece mesajın kendisini yaz. En fazla bir emoji.');
+  lines.push('Her gün farklı bir üslup kullan: bazen esprili, bazen ilham verici. Kısa ve vurucu olsun. Tırnak, başlık veya açıklama yazma; sadece mesajı yaz. Emoji kullanma.');
+  lines.push('Örnek uzunluk: "Zeren, bugün 120 ₺ ile telefona bir adım daha!"');
   return lines.join('\n');
 }
 
 // Üretilen metin önerilen tutarı içermiyorsa güvenme
 export function looksValid(text, amount) {
-  if (!text || text.length < 15) return false;
+  if (!text || text.length < 15 || text.length > 110) return false;
   const digits = String(Math.round(amount));
   return text.replace(/\./g, '').includes(digits);
 }
