@@ -12,9 +12,17 @@ function clean(t) {
     .trim();
 }
 
+// Son hatayı tanı için sakla (anahtarın kendisi asla yazılmaz)
+export const lastAiError = { value: null };
+
 export async function aiText(prompt) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  lastAiError.value = null;
+  if (!key) {
+    lastAiError.value = 'GEMINI_API_KEY tanımlı değil (Netlify > Environment variables, sonra yeniden deploy)';
+    return null;
+  }
+  const errors = [];
   for (const model of MODELS) {
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -27,16 +35,21 @@ export async function aiText(prompt) {
         signal: AbortSignal.timeout(9000),
       });
       if (!res.ok) {
-        console.error('gemini', model, res.status, (await res.text()).slice(0, 300));
+        const detail = (await res.text()).slice(0, 300);
+        console.error('gemini', model, res.status, detail);
+        errors.push(`${model}: ${res.status} ${detail}`);
         continue;
       }
       const j = await res.json();
       const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim();
       if (text) return clean(text);
+      errors.push(`${model}: boş cevap ${JSON.stringify(j).slice(0, 200)}`);
     } catch (e) {
       console.error('gemini', model, e.message);
+      errors.push(`${model}: ${e.message}`);
     }
   }
+  lastAiError.value = errors.join(' | ');
   return null;
 }
 
