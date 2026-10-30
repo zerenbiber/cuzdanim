@@ -67,6 +67,8 @@ export function savingsNudge(sv, today) {
   if (sv.lastContrib === today) return null; // bugün zaten para atılmış
   const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
   const open = (sv.goals || []).filter((g) => g.target > g.saved);
+  const hi = sv.name ? `${sv.name}, ` : '';
+  const cap = (t) => t.charAt(0).toLocaleUpperCase('tr-TR') + t.slice(1);
   let amount = sv.amount || 100;
   let body;
   if (open.length) {
@@ -80,9 +82,9 @@ export function savingsNudge(sv, today) {
     const left = g.target - g.saved;
     const days = g.deadline ? daysBetween(today, g.deadline) : 0;
     if (days > 0) amount = Math.max(10, roundUp(left / days, 10));
-    body = `Bugün kumbarana ${money(amount)} at. ${g.name} hedefinde %${pct} tamam, kalan ${money(left)}.`;
+    body = `${hi}bugün kumbarana ${money(amount)} at. ${g.name} hedefinde %${pct} tamam, kalan ${money(left)}.`;
   } else {
-    body = `Bugün kumbarana ${money(amount)} at. Küçük adımlar büyük birikime dönüşür!`;
+    body = `${hi}bugün kumbarana ${money(amount)} at. Küçük adımlar büyük birikime dönüşür!`;
   }
-  return { title: 'Kumbara zamanı', body, url: './#/hedefler' };
+  return { title: 'Kumbara zamanı', body: cap(body), url: './#/hedefler' };
 }

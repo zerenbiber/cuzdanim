@@ -83,7 +83,7 @@ export default function App() {
     if (!s.pushOn) return;
     const t = setTimeout(() => P.syncAll(s).catch(() => {}), 800);
     return () => clearTimeout(t);
-  }, [s.bills, s.goals, s.nudge, s.pushOn]);
+  }, [s.bills, s.goals, s.nudge, s.name, s.pushOn]);
 
   if (locked) return <Lock hash={s.pinHash} onOpen={() => setLocked(false)} />;
   if (!s.onboarded) return <Onboarding ctx={ctx} />;
@@ -152,21 +152,26 @@ function Lock({ hash, onOpen }) {
 // ---------- İlk açılış ----------
 function Onboarding({ ctx }) {
   const [bal, setBal] = useState('');
+  const [name, setName] = useState('');
   return (
     <div className="app onboarding">
       <div className="ob-logo">
         <Icon name="card" size={36} color="#fff" />
       </div>
       <h1>Cüzdanım'a hoş geldin</h1>
-      <p>Başlamak için bankadaki ve cebindeki toplam paranı yaz. Sonra her gelir ve gider bu bakiyeyi günceller.</p>
+      <p>Adını ve bankadaki ile cebindeki toplam paranı yaz. Sonra her gelir ve gider bu bakiyeyi günceller.</p>
+      <Field label="Adın">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn. Zeren" autoFocus autoCapitalize="words" />
+      </Field>
       <Field label="Başlangıç bakiyesi">
-        <AmountInput value={bal} onChange={setBal} big autoFocus />
+        <AmountInput value={bal} onChange={setBal} big />
       </Field>
       <button
         className="btn primary"
         onClick={() =>
           ctx.update((x) => {
             x.startBalance = D.parseAmount(bal);
+            x.name = name.trim().slice(0, 30);
             x.onboarded = true;
           })
         }
@@ -203,7 +208,13 @@ function Home({ ctx }) {
       <div className="header">
         <div>
           <div className="muted small">{greeting()}</div>
-          <div className="hello">Cüzdanım</div>
+          {s.name ? (
+            <div className="hello">Merhaba, {s.name}</div>
+          ) : (
+            <button className="hello link-name" onClick={() => setSheet('name')}>
+              Adını ekle
+            </button>
+          )}
         </div>
         <button className="icon-btn" style={{ marginLeft: 'auto' }} onClick={() => go('ayarlar')} aria-label="Ayarlar">
           <Icon name="gear" />
@@ -274,7 +285,8 @@ function Home({ ctx }) {
       </div>
       {recent.length ? <TxList ctx={ctx} items={recent} /> : <Empty text="Henüz işlem yok. Para Ekle ya da Harcama ile başla." />}
 
-      {sheet && <TxSheet ctx={ctx} type={sheet} onClose={() => setSheet(null)} />}
+      {(sheet === 'gelir' || sheet === 'gider') && <TxSheet ctx={ctx} type={sheet} onClose={() => setSheet(null)} />}
+      {sheet === 'name' && <NameSheet ctx={ctx} onClose={() => setSheet(null)} />}
     </>
   );
 }
@@ -1257,6 +1269,24 @@ function MoveSheet({ ctx, debt, type, onClose }) {
   );
 }
 
+function NameSheet({ ctx, onClose }) {
+  const [name, setName] = useState(ctx.s.name || '');
+  return (
+    <Sheet title="Adın" onClose={onClose}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn. Zeren" autoFocus autoCapitalize="words" />
+      <button
+        className="btn primary"
+        onClick={() => {
+          ctx.update((x) => void (x.name = name.trim().slice(0, 30)));
+          onClose();
+        }}
+      >
+        Kaydet
+      </button>
+    </Sheet>
+  );
+}
+
 // ---------- Bildirimler ----------
 function PushCard({ ctx }) {
   const { s } = ctx;
@@ -1347,12 +1377,24 @@ function Settings({ ctx }) {
   const { s } = ctx;
   const [bal, setBal] = useState('');
   const [pin, setPin] = useState('');
+  const [nameOpen, setNameOpen] = useState(false);
   const fileRef = React.useRef();
   const current = D.balance(s);
 
   return (
     <>
       <Header title="Ayarlar" onBack={back} />
+
+      <div className="card">
+        <h3>Profil</h3>
+        <div className="row gap center">
+          <span className="grow">{s.name ? `Adın: ${s.name}` : 'Adın henüz yok'}</span>
+          <button className="btn small" onClick={() => setNameOpen(true)}>
+            {s.name ? 'Değiştir' : 'Ekle'}
+          </button>
+        </div>
+      </div>
+      {nameOpen && <NameSheet ctx={ctx} onClose={() => setNameOpen(false)} />}
 
       <div className="card">
         <h3>Bakiye eşitleme</h3>

@@ -55,6 +55,7 @@ export const ASSETS = {
 const defaultState = () => ({
   version: 1,
   startBalance: 0,
+  name: '',
   onboarded: false,
   pinHash: null,
   categories: [

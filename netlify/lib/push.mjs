@@ -46,6 +46,7 @@ export function cleanSavings(x) {
     deadline: isDate(g?.deadline) ? g.deadline : null,
   }));
   return {
+    name: String(x?.name || '').slice(0, 30),
     on: x?.on !== false,
     amount: Math.min(1e6, Math.max(1, Number(x?.amount) || 100)),
     lastContrib: isDate(x?.lastContrib) ? x.lastContrib : null,

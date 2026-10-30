@@ -12,6 +12,7 @@ export const slimSavings = (s) => {
   let last = null;
   for (const g of s.goals) for (const c of g.contribs) if (c.amount > 0 && (!last || c.date > last)) last = c.date;
   return {
+    name: s.name || '',
     on: s.nudge?.on !== false,
     amount: s.nudge?.amount || 100,
     lastContrib: last,
