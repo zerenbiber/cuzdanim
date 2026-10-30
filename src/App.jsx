@@ -1279,7 +1279,7 @@ function PushCard({ ctx }) {
       <h3>Ödeme bildirimleri</h3>
       <p className="muted small">
         {s.pushOn
-          ? `Açık. ${count} fatura/ödeme için son günden 2 gün önce ve son gün sabah 09:00'da bildirim gelir.`
+          ? `Açık. ${count} fatura/ödeme için son günden 2 gün önce ve son gün; 09:00, 14:00 ve 20:00'de bildirim gelir.`
           : 'Fatura ve ödemelerin son günü yaklaşınca telefonuna bildirim gelsin.'}
       </p>
       {needInstall && <p className="small red">Bildirimler için uygulamayı ana ekrandaki ikondan aç.</p>}

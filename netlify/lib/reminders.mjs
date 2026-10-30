@@ -40,13 +40,20 @@ export function dueReminders(bills, today) {
   return out;
 }
 
-export function buildPayload(items) {
+// Günün hangi bildirimi: sabah / öğlen / akşam
+export const slotTR = (d = new Date()) => {
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', hour: '2-digit', hour12: false }).format(d));
+  return h < 12 ? 'sabah' : h < 17 ? 'oglen' : 'aksam';
+};
+
+export function buildPayload(items, slot = 'sabah') {
+  const lead = slot === 'aksam' ? 'Unutma: ' : slot === 'oglen' ? 'Hatırlatma: ' : '';
   const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
   const when = (d) => (d === 0 ? 'bugün son gün' : d === 1 ? 'yarın son gün' : `${d} gün kaldı`);
   const url = items.every((i) => i.kind === 'odeme') ? './#/odemeler' : './#/faturalar';
   if (items.length === 1) {
     const i = items[0];
-    return { title: `${i.name} ödemesi`, body: `${money(i.amount)} · ${when(i.days)}`, url };
+    return { title: `${lead}${i.name} ödemesi`, body: `${money(i.amount)} · ${when(i.days)}`, url };
   }
-  return { title: `${items.length} ödemen yaklaşıyor`, body: items.map((i) => `${i.name} ${money(i.amount)} (${when(i.days)})`).join(', '), url };
+  return { title: `${lead}${items.length} ödemen yaklaşıyor`, body: items.map((i) => `${i.name} ${money(i.amount)} (${when(i.days)})`).join(', '), url };
 }
