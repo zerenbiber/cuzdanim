@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as D from './data.js';
 import { Vault } from './vault.jsx';
+import * as P from './push.js';
 import { Icon, Header, Sheet, Field, AmountInput, Chips, Segmented, Bar, Check, Empty, Toast, MonthPicker, Jar, Confetti } from './ui.jsx';
 
 // ---------- Yönlendirme ----------
@@ -76,6 +77,13 @@ export default function App() {
       .then((r) => update((x) => void (x.rates = { ...x.rates, ...r })))
       .catch(() => {});
   }, []);
+
+  // Bildirimler açıksa fatura/ödeme listesi değişince sunucuya bildir
+  useEffect(() => {
+    if (!s.pushOn) return;
+    const t = setTimeout(() => P.syncBills(s.bills).catch(() => {}), 800);
+    return () => clearTimeout(t);
+  }, [s.bills, s.pushOn]);
 
   if (locked) return <Lock hash={s.pinHash} onOpen={() => setLocked(false)} />;
   if (!s.onboarded) return <Onboarding ctx={ctx} />;
@@ -570,6 +578,11 @@ function Bills({ ctx, kind }) {
         <Empty text={tab === 'bekleyen' ? 'Bekleyen yok.' : 'Bu ay ödenen yok.'} />
       )}
       <p className="muted small hint">"Ödendi" dediğinde tutar harcamalarına işlenir ve bakiyenden düşer.</p>
+      {!s.pushOn && (
+        <button className="link" onClick={() => go('ayarlar')}>
+          Son gün yaklaşınca bildirim almak için bildirimleri aç
+        </button>
+      )}
       <div className="fab-space" />
       <button className="btn primary fab" onClick={() => setSheet(true)}>
         <Icon name="plus" size={18} /> {isBill ? 'Fatura Ekle' : 'Ödeme Ekle'}
@@ -1244,6 +1257,70 @@ function MoveSheet({ ctx, debt, type, onClose }) {
   );
 }
 
+// ---------- Bildirimler ----------
+function PushCard({ ctx }) {
+  const { s } = ctx;
+  const [busy, setBusy] = useState(false);
+  const run = async (fn, ok) => {
+    setBusy(true);
+    try {
+      await fn();
+      if (ok) ctx.notify(ok);
+    } catch (e) {
+      ctx.notify(e.message || 'Bir hata oldu');
+    }
+    setBusy(false);
+  };
+  const needInstall = P.isIOS() && !P.isStandalone();
+  const count = s.bills.length;
+
+  return (
+    <div className="card">
+      <h3>Ödeme bildirimleri</h3>
+      <p className="muted small">
+        {s.pushOn
+          ? `Açık. ${count} fatura/ödeme için son günden 2 gün önce ve son gün sabah 09:00'da bildirim gelir.`
+          : 'Fatura ve ödemelerin son günü yaklaşınca telefonuna bildirim gelsin.'}
+      </p>
+      {needInstall && <p className="small red">Bildirimler için uygulamayı ana ekrandaki ikondan aç.</p>}
+      <div className="row gap wrap">
+        {s.pushOn ? (
+          <>
+            <button className="btn small" disabled={busy} onClick={() => run(P.testPush, 'Deneme bildirimi gönderildi')}>
+              Deneme gönder
+            </button>
+            <button
+              className="btn small ghost"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  await P.disablePush();
+                  ctx.update((x) => void (x.pushOn = false));
+                }, 'Bildirimler kapatıldı')
+              }
+            >
+              Kapat
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn small primary"
+            disabled={busy || needInstall}
+            onClick={() =>
+              run(async () => {
+                await P.enablePush(s.bills);
+                ctx.update((x) => void (x.pushOn = true));
+              }, 'Bildirimler açıldı')
+            }
+          >
+            {busy ? 'Açılıyor…' : 'Bildirimleri aç'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Ayarlar ----------
 function Settings({ ctx }) {
   const { s } = ctx;
@@ -1276,6 +1353,8 @@ function Settings({ ctx }) {
           </button>
         </div>
       </div>
+
+      <PushCard ctx={ctx} />
 
       <div className="card">
         <h3>PIN kilidi</h3>

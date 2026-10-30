@@ -77,7 +77,14 @@ export function AmountInput({ value, onChange, autoFocus, big }) {
   return (
     <div className={big ? 'amount big' : 'amount'}>
       <span>₺</span>
-      <input inputMode="decimal" placeholder="0" value={value} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ''))} />
+      <input
+        inputMode="decimal"
+        placeholder="0"
+        value={value}
+        autoFocus={autoFocus}
+        style={big ? { width: `${Math.max(1, (value || '').length) + 0.6}ch` } : null}
+        onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ''))}
+      />
     </div>
   );
 }

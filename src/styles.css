@@ -164,7 +164,7 @@ h3 { font-size: 16px; }
 .amount input { border: none !important; background: transparent !important; padding: 0 !important; height: 100% !important; }
 .amount.big { height: 72px; justify-content: center; border: none; background: transparent; }
 .amount.big span { font-size: 30px; }
-.amount.big input { font-size: 44px; font-weight: 700; text-align: center; max-width: 240px; letter-spacing: -1px; }
+.amount.big input { font-size: 44px; font-weight: 700; text-align: left; max-width: 260px; min-width: 1.6ch; flex: none; letter-spacing: -1px; }
 .limit-row .amount { max-width: 150px; }
 .check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .check input { width: 20px; height: 20px; accent-color: var(--green); }
