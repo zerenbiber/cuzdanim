@@ -356,3 +356,8 @@ h3 { font-size: 16px; }
 .confirm-item .seg { flex: 1; }
 .confirm-item .amount, .confirm-item input:not([type='checkbox']), .confirm-item select { background: #fff; }
 select { width: 100%; height: 46px; border-radius: 12px; border: 1px solid #dde0da; background: #f8f9f6; padding: 0 10px; font: inherit; font-size: 16px; color: var(--ink); }
+
+/* Yedek hatırlatması */
+.backup-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; background: #fbeae6; border: 1px solid #f3d3ca; }
+.backup-banner strong { display: block; font-size: 14px; color: #7a2412; }
+.backup-banner small { display: block; font-size: 12px; color: #7a2412; margin-top: 2px; line-height: 1.35; }

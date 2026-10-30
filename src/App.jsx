@@ -311,6 +311,8 @@ function Home({ ctx }) {
         </div>
       </div>
 
+      {!editing && <BackupBanner ctx={ctx} />}
+
       {!layout.hideQuick && <QuickAdd ctx={ctx} />}
 
       {!layout.hideMsg && <MotivationCard {...msg} />}
@@ -1549,6 +1551,55 @@ function NameSheet({ ctx, onClose }) {
   );
 }
 
+// ---------- Yedek (telefondaki dosyalara) ----------
+const backupDays = (s) => (s.lastBackup ? D.daysBetween(s.lastBackup, D.today()) : null);
+const backupAgo = (s) => {
+  const d = backupDays(s);
+  return d === 0 ? 'bugün' : d === 1 ? 'dün' : `${d} gün önce`;
+};
+// 7 günden eski yedek ya da hiç yedek yoksa (ve veri varsa) hatırlat
+const backupDue = (s) => {
+  const d = backupDays(s);
+  const hasData = s.transactions.length + s.savings.length + s.goals.length + s.debts.length > 0;
+  return hasData && (d === null || d >= 7);
+};
+
+async function backupNow(ctx) {
+  const name = `cuzdanim-yedek-${D.today()}.json`;
+  const content = JSON.stringify(ctx.s);
+  const done = () => {
+    ctx.update((x) => void (x.lastBackup = D.today()));
+    ctx.notify('Yedek alındı');
+  };
+  try {
+    const file = new File([content], name, { type: 'application/json' });
+    // iPhone'da paylaşım menüsü: "Dosyalara Kaydet" ile iCloud Drive'a kaydedilir
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Cüzdanım yedeği' });
+      return done();
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return; // kullanıcı vazgeçti
+  }
+  D.downloadFile(name, content, 'application/json');
+  done();
+}
+
+function BackupBanner({ ctx }) {
+  if (!backupDue(ctx.s)) return null;
+  return (
+    <div className="backup-banner">
+      <span className="grow">
+        <strong>Yedek alma zamanı</strong>
+        <small>{ctx.s.lastBackup ? `Son yedeğin ${backupAgo(ctx.s)}.` : 'Verilerin sadece bu telefonda.'} iCloud'a kaydet, kaybolmasın.</small>
+      </span>
+      <button className="btn small primary" onClick={() => backupNow(ctx)}>
+        Yedekle
+      </button>
+    </div>
+  );
+}
+
 // ---------- Bildirimler ----------
 function PushCard({ ctx }) {
   const { s } = ctx;
@@ -1708,10 +1759,15 @@ function Settings({ ctx }) {
 
       <div className="card">
         <h3>Yedek</h3>
-        <p className="muted small">Veriler sadece bu telefonda durur. Düzenli yedek al; telefon değişirse yedekten geri yüklersin.</p>
+        <p className="muted small">
+          Veriler sadece bu telefonda durur. Yedekle'ye basınca açılan menüden <strong>Dosyalara Kaydet → iCloud Drive</strong> seç; telefon değişse bile korunur.
+        </p>
+        <p className={backupDue(s) ? 'small red' : 'small green'} style={{ margin: 0 }}>
+          {s.lastBackup ? `Son yedek: ${backupAgo(s)}` : 'Henüz yedek alınmadı'}
+        </p>
         <div className="row gap wrap">
-          <button className="btn small" onClick={() => D.downloadFile(`cuzdanim-yedek-${D.today()}.json`, JSON.stringify(s), 'application/json')}>
-            Yedek indir
+          <button className="btn small primary" onClick={() => backupNow(ctx)}>
+            Yedekle
           </button>
           <button className="btn small" onClick={() => fileRef.current.click()}>
             Yedekten yükle
@@ -1732,7 +1788,7 @@ function Settings({ ctx }) {
               const data = JSON.parse(await f.text());
               if (!data.transactions) throw new Error();
               if (!confirm('Mevcut veriler yedektekiyle değiştirilsin mi?')) return;
-              ctx.update(() => ({ ...D.resetAll(), ...data }));
+              ctx.update(() => ({ ...D.resetAll(), ...data, lastBackup: D.today() }));
               ctx.notify('Yedek yüklendi');
             } catch {
               ctx.notify('Geçersiz yedek dosyası');
