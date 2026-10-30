@@ -62,15 +62,11 @@ export function buildPayload(items, slot = 'sabah') {
 // ---------- Günlük kumbara hatırlatması ----------
 const roundUp = (n, step) => Math.ceil(n / step) * step;
 
-export function savingsNudge(sv, today) {
-  if (!sv || sv.on === false) return null;
-  if (sv.lastContrib === today) return null; // bugün zaten para atılmış
-  const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
-  const open = (sv.goals || []).filter((g) => g.target > g.saved);
-  const hi = sv.name ? `${sv.name}, ` : '';
-  const cap = (t) => t.charAt(0).toLocaleUpperCase('tr-TR') + t.slice(1);
-  let amount = sv.amount || 100;
-  let body;
+// Kumbara mesajı için gerçekler: ad, önerilen tutar, odak hedef
+export function nudgeFacts(sv, today) {
+  const open = (sv?.goals || []).filter((g) => g.target > g.saved);
+  let amount = sv?.amount || 100;
+  let goal = null;
   if (open.length) {
     // En yakın tarihli hedef, yoksa en çok ilerlemiş hedef
     const g = [...open].sort((a, b) => {
@@ -78,13 +74,25 @@ export function savingsNudge(sv, today) {
       if (a.deadline || b.deadline) return a.deadline ? -1 : 1;
       return b.saved / b.target - a.saved / a.target;
     })[0];
-    const pct = Math.round((g.saved / g.target) * 100);
-    const left = g.target - g.saved;
     const days = g.deadline ? daysBetween(today, g.deadline) : 0;
-    if (days > 0) amount = Math.max(10, roundUp(left / days, 10));
-    body = `${hi}bugün kumbarana ${money(amount)} at. ${g.name} hedefinde %${pct} tamam, kalan ${money(left)}.`;
-  } else {
-    body = `${hi}bugün kumbarana ${money(amount)} at. Küçük adımlar büyük birikime dönüşür!`;
+    if (days > 0) amount = Math.max(10, roundUp((g.target - g.saved) / days, 10));
+    goal = { name: g.name, pct: Math.round((g.saved / g.target) * 100), left: g.target - g.saved, days };
   }
-  return { title: 'Kumbara zamanı', body: cap(body), url: './#/hedefler' };
+  return { name: sv?.name || '', amount, goal };
+}
+
+export function nudgeText(f) {
+  const money = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n) + ' ₺';
+  const hi = f.name ? `${f.name}, ` : '';
+  const body = f.goal
+    ? `${hi}bugün kumbarana ${money(f.amount)} at. ${f.goal.name} hedefinde %${f.goal.pct} tamam, kalan ${money(f.goal.left)}.`
+    : `${hi}bugün kumbarana ${money(f.amount)} at. Küçük adımlar büyük birikime dönüşür!`;
+  return body.charAt(0).toLocaleUpperCase('tr-TR') + body.slice(1);
+}
+
+export function savingsNudge(sv, today) {
+  if (!sv || sv.on === false) return null;
+  if (sv.lastContrib === today) return null; // bugün zaten para atılmış
+  const facts = nudgeFacts(sv, today);
+  return { title: 'Kumbara zamanı', body: nudgeText(facts), url: './#/hedefler', facts };
 }

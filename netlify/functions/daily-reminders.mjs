@@ -3,6 +3,7 @@
 // 15:00               -> günlük kumbara hatırlatması
 import { subs, setupVapid } from '../lib/push.mjs';
 import { dueReminders, buildPayload, savingsNudge, todayTR, slotTR } from '../lib/reminders.mjs';
+import { aiText, nudgePrompt, looksValid } from '../lib/ai.mjs';
 
 export default async () => {
   const webpush = setupVapid();
@@ -18,7 +19,15 @@ export default async () => {
     if (!rec?.subscription) continue;
 
     let payload = null;
-    if (slot === 'kumbara') payload = savingsNudge(rec.savings, today);
+    if (slot === 'kumbara') {
+      payload = savingsNudge(rec.savings, today);
+      if (payload) {
+        // Yapay zekadan kişisel mesaj; olmazsa hazır mesaj kalır
+        const ai = await aiText(nudgePrompt(payload.facts, 'bildirim'));
+        if (looksValid(ai, payload.facts.amount)) payload.body = ai;
+        delete payload.facts;
+      }
+    }
     else {
       const items = dueReminders(rec.bills, today);
       if (items.length) payload = buildPayload(items, slot);

@@ -78,6 +78,15 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Günün mesajı: günde bir kez yapay zekadan al (olmazsa hazır mesajlar kalır)
+  useEffect(() => {
+    if (!s.onboarded || s.aiMsg?.date === D.today() || !navigator.onLine) return;
+    fetch('/api/motivation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ savings: P.slimSavings(s) }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.ai && update((x) => void (x.aiMsg = { date: D.today(), text: j.text })))
+      .catch(() => {});
+  }, [s.onboarded]);
+
   // Bildirimler açıksa faturalar veya hedefler değişince (ve her açılışta) sunucuya bildir
   useEffect(() => {
     if (!s.pushOn) return;
@@ -199,7 +208,7 @@ function Home({ ctx }) {
   const ym = D.monthKey();
   const spent = D.monthSpending(s, ym).total;
   const lim = D.totalLimit(s);
-  const msg = useMemo(() => D.dailyMessage(s), [s]);
+  const msg = useMemo(() => (s.aiMsg?.date === D.today() ? s.aiMsg.text : D.dailyMessage(s)), [s]);
   const recent = [...s.transactions].sort((a, b) => (a.date + a.id < b.date + b.id ? 1 : -1)).slice(0, 5);
   const pending = D.billsForMonth(s, 'fatura', ym).concat(D.billsForMonth(s, 'odeme', ym)).filter((b) => !b.isPaid && b.daysLeft <= 3);
 
@@ -914,7 +923,7 @@ function Goals({ ctx }) {
       <Header title="Hedeflerim" onBack={back} />
       <div className="motivation">
         <Icon name="spark" size={18} color="#8A5A0B" />
-        <span>{D.dailyMessage(s)}</span>
+        <span>{s.aiMsg?.date === D.today() ? s.aiMsg.text : D.dailyMessage(s)}</span>
       </div>
       {active.length > 0 && (
         <div className="card">
