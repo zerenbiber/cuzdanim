@@ -20,7 +20,7 @@ export default async (req) => {
   } else return json({ error: 'method' }, 405);
   const facts = nudgeFacts(cleanSavings(body?.savings), todayTR());
   const ai = await aiText(nudgePrompt(facts, 'anasayfa'));
-  if (looksValid(ai, facts.amount)) return json({ text: ai, ai: true });
+  if (looksValid(ai, facts.amount, 'anasayfa')) return json({ text: ai, ai: true });
   const out = { text: nudgeText(facts), ai: false };
   if (req.method === 'GET') {
     out.anahtar = process.env.GEMINI_API_KEY ? `var (${process.env.GEMINI_API_KEY.slice(0, 3)}…, ${process.env.GEMINI_API_KEY.length} karakter)` : 'yok';
